@@ -70,6 +70,8 @@ SUPPORTED_TARGETS = \
   CYBT-343052-EVAL \
   CYW920735Q60EVB-01 \
   CYW920835M2EVB-01 \
+  CYBLE-343072-EVAL-M2B \
+  CYBLE-333074-EVAL-M2B \
   CYW920721M2EVK-01 \
   CYW920721M2EVK-02
 
@@ -146,6 +148,14 @@ PTS ?= 0
 ifeq ($(PTS),1)
 CY_APP_DEFINES += -DPTS
 endif # PTS
+
+# Enable Mesh Directed Forwarding support
+#CY_APP_DEFINES += -DDIRECTED_FORWARDING_SERVER_SUPPORTED
+# Enable Mesh Network Filter support - it is needed to simulate big distance between nodes for Directed Forwarding testing
+#CY_APP_DEFINES += -DNETWORK_FILTER_SERVER_SUPPORTED
+
+# Private proxy
+#CY_APP_DEFINES += -DPRIVATE_PROXY_SUPPORTED
 
 # These flags control whether the prebuilt mesh libs (core, models, and provisioner)
 # will be the trace enabled versions or not

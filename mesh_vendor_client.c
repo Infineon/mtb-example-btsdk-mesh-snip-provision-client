@@ -153,7 +153,8 @@ uint32_t mesh_vendor_client_proc_rx_cmd(uint16_t opcode, uint8_t *p_data, uint32
 void mesh_vendor_client_send_data(wiced_bt_mesh_event_t *p_event, uint8_t opcode, uint8_t *p_data, uint16_t data_len)
 {
     p_event->opcode = opcode;
-    wiced_bt_mesh_core_send(p_event, p_data, data_len, NULL);
+    if (wiced_bt_mesh_core_send(p_event, p_data, data_len, NULL) != WICED_BT_SUCCESS)   // Just to pass coverity
+        return;
 }
 
 #ifdef HCI_CONTROL
