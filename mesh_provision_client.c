@@ -42,12 +42,16 @@
 #include "wiced_bt_mesh_app.h"
 #include "wiced_bt_mesh_core.h"
 #include "wiced_bt_mesh_models.h"
+#include "wiced_bt_mesh_model_utils.h"
 #include "wiced_bt_mesh_provision.h"
 #if ( defined(DIRECTED_FORWARDING_SERVER_SUPPORTED) || defined(NETWORK_FILTER_SERVER_SUPPORTED))
 #include "wiced_bt_mesh_mdf.h"
 #endif
 #ifdef PRIVATE_PROXY_SUPPORTED
 #include "wiced_bt_mesh_private_proxy.h"
+#endif
+#ifdef MESH_DFU_SUPPORTED
+#include "wiced_bt_mesh_dfu.h"
 #endif
 #include "wiced_bt_trace.h"
 #include "wiced_transport.h"
@@ -133,7 +137,7 @@ extern void mesh_light_ctl_client_message_handler(uint16_t event, wiced_bt_mesh_
 
 #ifdef WICED_BT_MESH_MODEL_SENSOR_CLIENT_INCLUDED
 uint32_t mesh_sensor_client_proc_rx_cmd(uint16_t opcode, uint8_t *p_data, uint32_t length);
-extern void mesh_sensor_client_message_handler(uint8_t element_idx, uint16_t addr, uint16_t event, void *p_data);
+extern void mesh_sensor_client_message_handler(uint16_t event, wiced_bt_mesh_event_t* p_event, void* p_data);
 #endif
 
 #ifdef WICED_BT_MESH_MODEL_SCENE_CLIENT_INCLUDED
@@ -418,6 +422,10 @@ wiced_bt_mesh_core_config_model_t   mesh_element1_models[] =
 #ifdef PRIVATE_PROXY_SUPPORTED
     WICED_BT_MESH_MODEL_PRIVATE_PROXY_CLIENT,
 #endif
+#ifdef MESH_DFU_SUPPORTED
+    WICED_BT_MESH_MODEL_FW_UPDATE_CLIENT,
+    WICED_BT_MESH_MODEL_BLOB_TRANSFER_CLIENT,
+#endif
 #ifdef WICED_BT_MESH_MODEL_SENSOR_CLIENT_INCLUDED
     WICED_BT_MESH_MODEL_SENSOR_CLIENT,
 #endif
@@ -636,6 +644,11 @@ void mesh_app_init(wiced_bool_t is_provisioned)
     p_proxy_status_message_handler = mesh_proxy_client_process_filter_status;
 }
 
+#ifdef PTS
+// Add this to enable retransmit cancellation
+wiced_bt_mesh_event_t *p_out_event = NULL;
+#endif
+
 wiced_bool_t mesh_model_raw_data_message_handler(wiced_bt_mesh_event_t *p_event, const uint8_t *params, uint16_t params_len)
 {
     wiced_bt_mesh_hci_event_t *p_hci_event = wiced_bt_mesh_create_hci_event(p_event);
@@ -646,6 +659,11 @@ wiced_bool_t mesh_model_raw_data_message_handler(wiced_bt_mesh_event_t *p_event,
         return WICED_FALSE;
     }
     WICED_BT_TRACE("model raw data opcode:%04x\n", p_event->opcode);
+
+#ifdef PTS
+    // If we are still retransmitting cancel transmit
+    wiced_bt_mesh_models_utils_cancel_send(&p_out_event, p_event->src);
+#endif
 
     if (p_event->company_id == MESH_COMPANY_ID_BT_SIG)
     {
@@ -664,6 +682,7 @@ wiced_bool_t mesh_model_raw_data_message_handler(wiced_bt_mesh_event_t *p_event,
     p += params_len;
 
     mesh_transport_send_data(HCI_CONTROL_MESH_EVENT_RAW_MODEL_DATA, (uint8_t *)p_hci_event, (uint16_t)(p - (uint8_t *)p_hci_event));
+    wiced_bt_mesh_release_event(p_event);
     return WICED_TRUE;
 }
 
@@ -1642,6 +1661,13 @@ uint32_t mesh_app_proc_rx_cmd(uint16_t opcode, uint8_t *p_data, uint32_t length)
  */
 uint8_t mesh_provisioner_process_raw_model_data(wiced_bt_mesh_event_t *p_event, uint8_t *p_data, uint32_t length)
 {
+#ifdef PTS
+    // Send with out_event_queue so we can cancel retransmit when response is received
+    wiced_result_t result;
+    uint16_t opcode = (p_data[0] << 8) + p_data[1];
+    if (wiced_bt_mesh_models_utils_send(p_event, &p_out_event, WICED_TRUE, opcode, p_data + 2, length - 2, NULL) != WICED_BT_SUCCESS)
+        return HCI_CONTROL_MESH_STATUS_ERROR;
+#else
     if ((p_data[0] & (MESH_APP_PAYLOAD_OP_LONG | MESH_APP_PAYLOAD_OP_MANUF_SPECIFIC)) == (MESH_APP_PAYLOAD_OP_LONG | MESH_APP_PAYLOAD_OP_MANUF_SPECIFIC))
     {
         p_event->opcode = p_data[0] & ~(MESH_APP_PAYLOAD_OP_LONG | MESH_APP_PAYLOAD_OP_MANUF_SPECIFIC);
@@ -1658,6 +1684,7 @@ uint8_t mesh_provisioner_process_raw_model_data(wiced_bt_mesh_event_t *p_event, 
     }
     if (wiced_bt_mesh_core_send(p_event, p_data, length, NULL) != WICED_BT_SUCCESS)
         return HCI_CONTROL_MESH_STATUS_ERROR;
+#endif
     return HCI_CONTROL_MESH_STATUS_SUCCESS;
 }
 
@@ -3264,7 +3291,7 @@ void mesh_provisioner_hci_event_device_capabilities_send(wiced_bt_mesh_hci_event
 {
     uint8_t *p = p_hci_event->data;
 
-    WICED_BT_TRACE("mesh prov caps from:%x num_elelements:%d key_type:%d\n", p_data->provisioner_addr, p_data->elements_num, p_data->pub_key_type);
+    WICED_BT_TRACE("mesh prov caps from:%x num_elements:%d key_type:%d\n", p_data->provisioner_addr, p_data->elements_num, p_data->pub_key_type);
 
     UINT16_TO_STREAM(p, p_data->provisioner_addr);
     UINT8_TO_STREAM(p, p_data->elements_num);
@@ -3276,7 +3303,7 @@ void mesh_provisioner_hci_event_device_capabilities_send(wiced_bt_mesh_hci_event
     UINT8_TO_STREAM(p, p_data->input_oob_size);
     UINT16_TO_STREAM(p, p_data->input_oob_action);
 
-    mesh_transport_send_data(HCI_CONTROL_MESH_EVENT_PROVISION_DEVICE_CAPABITIES, (uint8_t *)p_hci_event, (uint16_t)(p - (uint8_t *)p_hci_event));
+    mesh_transport_send_data(HCI_CONTROL_MESH_EVENT_PROVISION_DEVICE_CAPABILITIES, (uint8_t *)p_hci_event, (uint16_t)(p - (uint8_t *)p_hci_event));
 }
 
 /*

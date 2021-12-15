@@ -49,6 +49,7 @@ TARGET=CYW920706WCDEVAL
 SUPPORTED_TARGETS = \
   CYW920819EVB-02 \
   CYBT-213043-MESH \
+  CYBLE-343072-MESH \
   CYBT-243053-EVAL \
   CYBT-253059-EVAL \
   CYBT-223058-EVAL \
@@ -67,13 +68,15 @@ SUPPORTED_TARGETS = \
   CYW920706WCDEVAL \
   CYBT-353027-EVAL \
   CYBT-343026-EVAL \
+  CYBT-333047-EVAL \
   CYBT-343052-EVAL \
   CYW920735Q60EVB-01 \
   CYW920835M2EVB-01 \
   CYBLE-343072-EVAL-M2B \
   CYBLE-333074-EVAL-M2B \
   CYW920721M2EVK-01 \
-  CYW920721M2EVK-02
+  CYW920721M2EVK-02 \
+  CYW920721M2EVB-03
 
 #
 # Advanced Configuration
@@ -149,6 +152,9 @@ ifeq ($(PTS),1)
 CY_APP_DEFINES += -DPTS
 endif # PTS
 
+# Enable Mesh DFU support
+#CY_APP_DEFINES += -DMESH_DFU_SUPPORTED
+
 # Enable Mesh Directed Forwarding support
 #CY_APP_DEFINES += -DDIRECTED_FORWARDING_SERVER_SUPPORTED
 # Enable Mesh Network Filter support - it is needed to simulate big distance between nodes for Directed Forwarding testing
@@ -156,6 +162,9 @@ endif # PTS
 
 # Private proxy
 #CY_APP_DEFINES += -DPRIVATE_PROXY_SUPPORTED
+
+# Enable Certificate Based Provisioning
+#CY_APP_DEFINES += -DCERTIFICATE_BASED_PROVISIONING_SUPPORTED
 
 # These flags control whether the prebuilt mesh libs (core, models, and provisioner)
 # will be the trace enabled versions or not
