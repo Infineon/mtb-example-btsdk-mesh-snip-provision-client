@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2021, Cypress Semiconductor Corporation (an Infineon company) or
+ * Copyright 2016-2022, Cypress Semiconductor Corporation (an Infineon company) or
  * an affiliate of Cypress Semiconductor Corporation.  All rights reserved.
  *
  * This software, including source code, documentation and related
@@ -345,6 +345,15 @@ static void mesh_provisioner_hci_event_df_path_discovery_timing_control_status_s
 static void mesh_provisioner_hci_event_df_directed_control_network_transmit_status_send(wiced_bt_mesh_hci_event_t* p_hci_event, wiced_bt_mesh_df_directed_transmit_status_data_t* p_data);
 static void mesh_provisioner_hci_event_df_directed_control_relay_retransmit_status_send(wiced_bt_mesh_hci_event_t* p_hci_event, wiced_bt_mesh_df_directed_transmit_status_data_t* p_data);
 #endif
+
+#if defined(CERTIFICATE_BASED_PROVISIONING_SUPPORTED)
+static void mesh_provisioner_hci_event_record_list(wiced_bt_mesh_hci_event_t *p_hci_event, wiced_bt_mesh_core_provisioning_list_t *p_data);
+static void mesh_provisioner_hci_event_record_response(wiced_bt_mesh_hci_event_t *p_hci_event, wiced_bt_mesh_core_provisioning_record_t *p_data);
+
+static uint8_t mesh_provisioner_process_send_invite(wiced_bt_mesh_event_t *p_event, uint8_t *p_data, uint32_t length);
+static uint8_t mesh_provisioner_process_record_get(wiced_bt_mesh_event_t *p_event, uint8_t *p_data, uint32_t length);
+#endif
+
 #ifdef NETWORK_FILTER_SERVER_SUPPORTED
 static void mesh_provisioner_hci_event_network_filter_status_send(wiced_bt_mesh_hci_event_t* p_hci_event, wiced_bt_mesh_network_filter_status_data_t* p_data);
 #endif
@@ -705,6 +714,16 @@ void mesh_config_client_message_handler(uint16_t event, wiced_bt_mesh_event_t *p
         WICED_BT_TRACE("tx complete status:%d\n", p_event->status.tx_flag);
         wiced_bt_mesh_send_hci_tx_complete(p_hci_event, p_event);
         break;
+
+#if defined(CERTIFICATE_BASED_PROVISIONING_SUPPORTED)
+    case WICED_BT_MESH_DEVICE_PROVISIONING_RECORD_LIST:
+        mesh_provisioner_hci_event_record_list(p_hci_event, (wiced_bt_mesh_core_provisioning_list_t *)p_data);
+        break;
+
+    case WICED_BT_MESH_DEVICE_PROVISIONING_RECORD_RESP:
+        mesh_provisioner_hci_event_record_response(p_hci_event, (wiced_bt_mesh_core_provisioning_record_t *)p_data);
+        break;
+#endif
 
     case WICED_BT_MESH_CONFIG_NODE_RESET_STATUS:
         mesh_provisioner_hci_event_node_reset_status_send(p_hci_event);
@@ -1181,6 +1200,10 @@ uint32_t mesh_app_proc_rx_cmd(uint16_t opcode, uint8_t *p_data, uint32_t length)
     case HCI_CONTROL_MESH_COMMAND_CONFIG_NETWORK_TRANSMIT_SET:
     case HCI_CONTROL_MESH_COMMAND_CONFIG_LPN_POLL_TIMEOUT_GET:
     case HCI_CONTROL_MESH_COMMAND_RAW_MODEL_DATA:
+#if defined(CERTIFICATE_BASED_PROVISIONING_SUPPORTED)
+    case HCI_CONTROL_MESH_COMMAND_PROVISION_SEND_INVITE:
+    case HCI_CONTROL_MESH_COMMAND_PROVISION_RETRIEVE_RECORD:
+#endif
         p_event = wiced_bt_mesh_create_event_from_wiced_hci(opcode, MESH_COMPANY_ID_BT_SIG, WICED_BT_MESH_CORE_MODEL_ID_CONFIG_CLNT, &p_data, &length);
         if (p_event == NULL)
         {
@@ -1648,6 +1671,14 @@ uint32_t mesh_app_proc_rx_cmd(uint16_t opcode, uint8_t *p_data, uint32_t length)
         status = mesh_provisioner_process_raw_model_data(p_event, p_data, length);
         break;
 
+#if defined(CERTIFICATE_BASED_PROVISIONING_SUPPORTED)
+    case HCI_CONTROL_MESH_COMMAND_PROVISION_SEND_INVITE:
+        status = mesh_provisioner_process_send_invite(p_event,  p_data, length);
+        break;
+    case HCI_CONTROL_MESH_COMMAND_PROVISION_RETRIEVE_RECORD:
+        status = mesh_provisioner_process_record_get(p_event, p_data, length);
+        break;
+#endif
     default:
         wiced_bt_mesh_release_event(p_event);
         break;
@@ -2874,6 +2905,10 @@ uint8_t mesh_provisioner_process_model_subscription_change(wiced_bt_mesh_event_t
     {
         STREAM_TO_ARRAY(data.addr, p_data, 16);
     }
+    else
+    {
+        memset(data.addr, 0, 16*sizeof(uint8_t));
+    }
     return wiced_bt_mesh_config_model_subscription_change(p_event, &data) ? HCI_CONTROL_MESH_STATUS_SUCCESS : HCI_CONTROL_MESH_STATUS_ERROR;
 }
 
@@ -2903,6 +2938,10 @@ uint8_t mesh_provisioner_process_netkey_change(wiced_bt_mesh_event_t *p_event, u
     {
         STREAM_TO_ARRAY(data.net_key, p_data, 16);
     }
+    else
+    {
+        memset(data.net_key, 0, 16*sizeof(uint8_t));
+    }
     return wiced_bt_mesh_config_netkey_change(p_event, &data) ? HCI_CONTROL_MESH_STATUS_SUCCESS : HCI_CONTROL_MESH_STATUS_ERROR;
 }
 
@@ -2919,7 +2958,7 @@ uint8_t mesh_provisioner_process_netkey_get(wiced_bt_mesh_event_t *p_event, uint
  */
 uint8_t mesh_provisioner_process_appkey_change(wiced_bt_mesh_event_t *p_event, uint8_t operation, uint8_t *p_data, uint32_t length)
 {
-    wiced_bt_mesh_config_appkey_change_data_t data;
+    wiced_bt_mesh_config_appkey_change_data_t data = { 0 };
 
     data.operation = operation;
     STREAM_TO_UINT16(data.net_key_idx, p_data);
@@ -2927,6 +2966,10 @@ uint8_t mesh_provisioner_process_appkey_change(wiced_bt_mesh_event_t *p_event, u
     if (operation != OPERATION_DELETE)
     {
         STREAM_TO_ARRAY(data.app_key, p_data, 16);
+    }
+    else
+    {
+        memset(data.app_key, 0, 16*sizeof(uint8_t));
     }
     return wiced_bt_mesh_config_appkey_change(p_event, &data) ? HCI_CONTROL_MESH_STATUS_SUCCESS : HCI_CONTROL_MESH_STATUS_ERROR;
 }
@@ -3067,7 +3110,7 @@ uint8_t mesh_provisioner_process_health_fault_clear(wiced_bt_mesh_event_t *p_eve
 }
 
 /*
- * Process command from MCU to nvoke a self-test procedure of an element
+ * Process command from MCU to invoke a self-test procedure of an element
  */
 uint8_t mesh_provisioner_process_health_fault_test(wiced_bt_mesh_event_t *p_event, uint8_t *p_data, uint32_t length)
 {
@@ -3149,6 +3192,24 @@ uint8_t mesh_provisioner_process_proxy_filter_change(wiced_bt_mesh_event_t *p_ev
     wiced_bt_free_buffer(p_addr);
     return res;
 }
+
+#if defined(CERTIFICATE_BASED_PROVISIONING_SUPPORTED)
+uint8_t mesh_provisioner_process_send_invite(wiced_bt_mesh_event_t *p_event, uint8_t *p_data, uint32_t length)
+{
+    return wiced_bt_mesh_provision_send_invite(p_event) ? HCI_CONTROL_MESH_STATUS_SUCCESS : HCI_CONTROL_MESH_STATUS_ERROR;
+}
+
+uint8_t mesh_provisioner_process_record_get(wiced_bt_mesh_event_t *p_event, uint8_t *p_data, uint32_t length)
+{
+    wiced_bt_mesh_provision_device_record_fragment_data_t data;
+
+    BE_STREAM_TO_UINT16(data.record_id, p_data);
+    BE_STREAM_TO_UINT16(data.fragment_offset, p_data);
+    BE_STREAM_TO_UINT16(data.total_length, p_data);
+
+    return wiced_bt_mesh_provision_retrieve_record(p_event, &data) ? HCI_CONTROL_MESH_STATUS_SUCCESS : HCI_CONTROL_MESH_STATUS_ERROR;
+}
+#endif
 
 void mesh_provisioner_hci_send_status(uint8_t status)
 {
@@ -3255,7 +3316,7 @@ void mesh_provisioner_hci_event_provision_link_status_send(wiced_bt_mesh_hci_eve
 void mesh_provisioner_hci_event_provision_link_report_send(wiced_bt_mesh_hci_event_t *p_hci_event, wiced_bt_mesh_provision_link_report_data_t *p_data)
 {
     uint8_t *p = p_hci_event->data;
-//    uint8_t connected = ((p_data->rpr_state == WICED_BT_MESH_REMOTE_PROVISION_STATE_LINK_ACTIVE) || (p_data->rpr_state == WICED_BT_MESH_REMOTE_PROVISION_STATE_OUTBOUNT_PDU_TRANSFER));
+//    uint8_t connected = ((p_data->rpr_state == WICED_BT_MESH_REMOTE_PROVISION_STATE_LINK_ACTIVE) || (p_data->rpr_state == WICED_BT_MESH_REMOTE_PROVISION_STATE_OUTBOUND_PDU_TRANSFER));
 
     WICED_BT_TRACE("provision link report from %x status:%d state:%d reason:%d over_gatt:%d\n", p_hci_event->src, p_data->link_status, p_data->rpr_state, p_data->reason, p_data->over_gatt);
     UINT8_TO_STREAM(p, p_data->link_status);
@@ -3336,6 +3397,39 @@ void mesh_provisioner_hci_event_proxy_connection_status_send(wiced_bt_mesh_hci_e
 
     mesh_transport_send_data(HCI_CONTROL_MESH_EVENT_PROXY_CONNECTION_STATUS, (uint8_t *)p_hci_event, (uint16_t)(p - (uint8_t *)p_hci_event));
 }
+
+#if defined(CERTIFICATE_BASED_PROVISIONING_SUPPORTED)
+
+void mesh_provisioner_hci_event_record_list(wiced_bt_mesh_hci_event_t *p_hci_event, wiced_bt_mesh_core_provisioning_list_t *p_data)
+{
+    uint8_t *p = p_hci_event->data;
+//    WICED_BT_TRACE_ARRAY((uint8_t *)p_data->list, p_data->list_size*sizeof(uint16_t), " mesh prov record list");
+
+    UINT16_TO_STREAM(p, p_data->extensions);
+    for (uint8_t i = 0; i < p_data->list_size; ++i)
+    {
+        UINT16_TO_STREAM(p, p_data->list[i]);
+    }
+    mesh_transport_send_data(HCI_CONTROL_MESH_EVENT_PROVISION_RECORD_LIST, (uint8_t *)p_hci_event, (uint16_t)(p - (uint8_t *)p_hci_event));
+}
+
+void mesh_provisioner_hci_event_record_response(wiced_bt_mesh_hci_event_t *p_hci_event, wiced_bt_mesh_core_provisioning_record_t *p_data)
+{
+    uint8_t *p = p_hci_event->data;
+//    WICED_BT_TRACE_ARRAY(p_data->data, p_data->size, " mesh prov record fragment");
+
+    UINT8_TO_STREAM(p, p_data->status);
+    UINT16_TO_STREAM(p, p_data->u.response.record_id);
+    UINT16_TO_STREAM(p, p_data->u.response.fragment_offset);
+    UINT16_TO_STREAM(p, p_data->u.response.total_length);
+    for (uint8_t i = 0; i < p_data->size; ++i)
+    {
+        UINT8_TO_STREAM(p, p_data->data[i]);
+    }
+
+    mesh_transport_send_data(HCI_CONTROL_MESH_EVENT_PROVISION_RECORD_RESPONSE, (uint8_t *)p_hci_event, (uint16_t)(p - (uint8_t *)p_hci_event));
+}
+#endif
 
 void mesh_provisioner_hci_event_proxy_filter_status_send(wiced_bt_mesh_hci_event_t *p_hci_event, wiced_bt_mesh_proxy_filter_status_data_t *p_data)
 {

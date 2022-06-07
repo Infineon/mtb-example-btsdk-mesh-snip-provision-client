@@ -1,5 +1,5 @@
 #
-# Copyright 2016-2021, Cypress Semiconductor Corporation (an Infineon company) or
+# Copyright 2016-2022, Cypress Semiconductor Corporation (an Infineon company) or
 # an affiliate of Cypress Semiconductor Corporation.  All rights reserved.
 #
 # This software, including source code, documentation and related
@@ -63,7 +63,6 @@ SUPPORTED_TARGETS = \
   CYBT-483062-EVAL \
   CYW920820EVB-02 \
   CYBT-213043-EVAL \
-  CYW920721B2EVK-02 \
   CYW920719B2Q40EVB-01 \
   CYW920706WCDEVAL \
   CYBT-353027-EVAL \
@@ -76,7 +75,8 @@ SUPPORTED_TARGETS = \
   CYBLE-333074-EVAL-M2B \
   CYW920721M2EVK-01 \
   CYW920721M2EVK-02 \
-  CYW920721M2EVB-03
+  CYW920721M2EVB-03 \
+  CYW920820M2EVB-01
 
 #
 # Advanced Configuration
@@ -152,8 +152,11 @@ ifeq ($(PTS),1)
 CY_APP_DEFINES += -DPTS
 endif # PTS
 
+# Mesh DFU is not supported on 20706 due to memory limitation
+ifneq ($(TARGET),CYW920706WCDEVAL)
 # Enable Mesh DFU support
 #CY_APP_DEFINES += -DMESH_DFU_SUPPORTED
+endif # !CYW920706WCDEVAL
 
 # Enable Mesh Directed Forwarding support
 #CY_APP_DEFINES += -DDIRECTED_FORWARDING_SERVER_SUPPORTED
