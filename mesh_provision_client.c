@@ -153,7 +153,6 @@ wiced_bool_t mesh_gatt_client_local_device_set(wiced_bt_mesh_local_device_set_da
  ******************************************************/
 #define MESH_PID                0x301D
 #define MESH_VID                0x0002
-#define MESH_CACHE_REPLAY_SIZE  200
 #define MESH_APP_RPL_DELAY      30        // Value is seconds. Use RPL = 0 to update immediately so that message cannot be replayed
 /******************************************************
  *          Structures
@@ -498,7 +497,6 @@ wiced_bt_mesh_core_config_t  mesh_config =
     .company_id         = MESH_COMPANY_ID_CYPRESS,                  // Company identifier assigned by the Bluetooth SIG
     .product_id         = MESH_PID,                                 // Vendor-assigned product identifier
     .vendor_id          = MESH_VID,                                 // Vendor-assigned product version identifier
-    .replay_cache_size  = MESH_CACHE_REPLAY_SIZE,                   // Number of replay protection entries, i.e. maximum number of mesh devices that can send application messages to this device.
     .features                  = 0,                                 // no relay, no friend, no proxy
     .friend_cfg         =                                           // Empty Configuration of the Friend Feature
     {

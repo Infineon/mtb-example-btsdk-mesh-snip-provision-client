@@ -68,8 +68,6 @@ SUPPORTED_TARGETS = \
   CYBT-353027-EVAL \
   CYBT-343026-EVAL \
   CYBT-333047-EVAL \
-  CYBT-343052-EVAL \
-  CYW920735Q60EVB-01 \
   CYW920835M2EVB-01 \
   CYBLE-343072-EVAL-M2B \
   CYBLE-333074-EVAL-M2B \
@@ -98,7 +96,7 @@ FEATURES=
 #
 # App features/defaults
 #
-OTA_FW_UPGRADE?=1
+OTA_FW_UPGRADE?=0
 UART?=AUTO
 XIP?=xip
 TRANSPORT?=UART
@@ -268,6 +266,7 @@ endif
 # Chip-specific patch libs
 CY_20706A2_APP_PATCH_LIBS += rtc_lib.a
 CY_20706A2_APP_PATCH_LIBS += wiced_bt_mesh.a
+CY_20706A2_APP_PATCH_LIBS += wiced_memory_pre_init_lib.a
 
 ################################################################################
 # Paths
