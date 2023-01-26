@@ -1,5 +1,5 @@
 #
-# Copyright 2016-2022, Cypress Semiconductor Corporation (an Infineon company) or
+# Copyright 2016-2023, Cypress Semiconductor Corporation (an Infineon company) or
 # an affiliate of Cypress Semiconductor Corporation.  All rights reserved.
 #
 # This software, including source code, documentation and related
@@ -48,6 +48,7 @@ TARGET=CYW920706WCDEVAL
 
 SUPPORTED_TARGETS = \
   CYW920819EVB-02 \
+  CYW920819M2EVB-01 \
   CYBT-213043-MESH \
   CYBLE-343072-MESH \
   CYBT-243053-EVAL \
@@ -161,11 +162,20 @@ endif # !CYW920706WCDEVAL
 # Enable Mesh Network Filter support - it is needed to simulate big distance between nodes for Directed Forwarding testing
 #CY_APP_DEFINES += -DNETWORK_FILTER_SERVER_SUPPORTED
 
+# Enable Large Compositin Data
+#CY_APP_DEFINES += -DLARGE_COMPOSITION_DATA_SUPPORTED
+
+# Enable SAR Configuration support
+#CY_APP_DEFINES += -DSAR_CONFIGURATION_SUPPORTED
+
 # Private proxy
 #CY_APP_DEFINES += -DPRIVATE_PROXY_SUPPORTED
 
 # Enable Certificate Based Provisioning
 #CY_APP_DEFINES += -DCERTIFICATE_BASED_PROVISIONING_SUPPORTED
+
+# Enable Opcodes Aggregator support
+#CY_APP_DEFINES += -DOPCODES_AGGREGATOR_SUPPORTED
 
 # These flags control whether the prebuilt mesh libs (core, models, and provisioner)
 # will be the trace enabled versions or not

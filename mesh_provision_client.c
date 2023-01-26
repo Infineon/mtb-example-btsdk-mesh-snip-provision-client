@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2022, Cypress Semiconductor Corporation (an Infineon company) or
+ * Copyright 2016-2023, Cypress Semiconductor Corporation (an Infineon company) or
  * an affiliate of Cypress Semiconductor Corporation.  All rights reserved.
  *
  * This software, including source code, documentation and related
@@ -47,11 +47,21 @@
 #if ( defined(DIRECTED_FORWARDING_SERVER_SUPPORTED) || defined(NETWORK_FILTER_SERVER_SUPPORTED))
 #include "wiced_bt_mesh_mdf.h"
 #endif
+#ifdef LARGE_COMPOSITION_DATA_SUPPORTED
+#include "wiced_bt_mesh_lcd.h"
+#endif
+#ifdef SAR_CONFIGURATION_SUPPORTED
+#include "wiced_bt_mesh_sar.h"
+#endif
 #ifdef PRIVATE_PROXY_SUPPORTED
 #include "wiced_bt_mesh_private_proxy.h"
 #endif
 #ifdef MESH_DFU_SUPPORTED
 #include "wiced_bt_mesh_dfu.h"
+#include "wiced_firmware_upgrade.h"
+#endif
+#ifdef OPCODES_AGGREGATOR_SUPPORTED
+#include "wiced_bt_mesh_agg.h"
 #endif
 #include "wiced_bt_trace.h"
 #include "wiced_transport.h"
@@ -175,6 +185,10 @@ static uint8_t mesh_provisioner_process_oob_value(wiced_bt_mesh_event_t *p_event
 static uint8_t mesh_provisioner_process_search_proxy(uint8_t *p_data, uint32_t length);
 static uint8_t mesh_provisioner_process_proxy_connect(uint8_t *p_data, uint32_t length);
 static uint8_t mesh_provisioner_process_proxy_disconnect(uint8_t *p_data, uint32_t length);
+#ifdef OPCODES_AGGREGATOR_SUPPORTED
+static uint8_t mesh_provisioner_process_aggregator_start(uint8_t *p_data, uint32_t length);
+static uint8_t mesh_provisioner_process_aggregator_finish(uint8_t *p_data, uint32_t length);
+#endif
 static uint8_t mesh_provisioner_process_raw_model_data(wiced_bt_mesh_event_t *p_event, uint8_t *p_data, uint32_t length);
 static uint8_t mesh_provisioner_process_scan_capabilities_get(wiced_bt_mesh_event_t *p_event, uint8_t *p_data, uint32_t length);
 static uint8_t mesh_provisioner_process_scan_get(wiced_bt_mesh_event_t *p_event, uint8_t *p_data, uint32_t length);
@@ -229,6 +243,16 @@ static uint8_t mesh_provisioner_process_df_directed_control_relay_retransmit_set
 static uint8_t mesh_provisioner_process_network_filter_get(wiced_bt_mesh_event_t* p_event, uint8_t* p_data, uint32_t length);
 static uint8_t mesh_provisioner_process_network_filter_set(wiced_bt_mesh_event_t* p_event, uint8_t* p_data, uint32_t length);
 #endif
+#ifdef LARGE_COMPOSITION_DATA_SUPPORTED
+uint8_t mesh_provisioner_process_large_compos_data_get(wiced_bt_mesh_event_t* p_event, uint8_t* p_data, uint32_t length);
+uint8_t mesh_provisioner_process_models_metadata_get(wiced_bt_mesh_event_t* p_event, uint8_t* p_data, uint32_t length);
+#endif
+#ifdef SAR_CONFIGURATION_SUPPORTED
+static uint8_t mesh_provisioner_process_sar_transmitter_get(wiced_bt_mesh_event_t *p_event, uint8_t *p_data, uint32_t length);
+static uint8_t mesh_provisioner_process_sar_transmitter_set(wiced_bt_mesh_event_t *p_event, uint8_t *p_data, uint32_t length);
+static uint8_t mesh_provisioner_process_sar_receiver_get(wiced_bt_mesh_event_t *p_event, uint8_t *p_data, uint32_t length);
+static uint8_t mesh_provisioner_process_sar_receiver_set(wiced_bt_mesh_event_t *p_event, uint8_t *p_data, uint32_t length);
+#endif
 #ifdef PRIVATE_PROXY_SUPPORTED
 static uint8_t mesh_provisioner_process_private_beacon_get(wiced_bt_mesh_event_t *p_event, uint8_t *p_data, uint32_t length);
 static uint8_t mesh_provisioner_process_private_beacon_set(wiced_bt_mesh_event_t *p_event, uint8_t *p_data, uint32_t length);
@@ -240,6 +264,17 @@ static uint8_t mesh_provisioner_process_on_demand_private_proxy_get(wiced_bt_mes
 static uint8_t mesh_provisioner_process_on_demand_private_proxy_set(wiced_bt_mesh_event_t *p_event, uint8_t *p_data, uint32_t length);
 static uint8_t mesh_provisioner_process_solicitation_pdu_rpl_items_clear(wiced_bt_mesh_event_t *p_event, uint8_t *p_data, uint32_t length);
 static uint8_t mesh_provisioner_send_solicitation_pdu(uint8_t *p_data, uint32_t length);
+#endif
+#ifdef MESH_DFU_SUPPORTED
+uint8_t mesh_provisioner_process_fw_upload_start(uint8_t *p_data, uint32_t length);
+uint8_t mesh_provisioner_process_fw_upload_data(uint8_t *p_data, uint32_t length);
+uint8_t mesh_provisioner_process_fw_upload_finish(uint8_t *p_data, uint32_t length);
+uint8_t mesh_provisioner_process_fw_update_metadata_check(wiced_bt_mesh_event_t *p_event, uint8_t *p_data, uint32_t length);
+uint8_t mesh_provisioner_process_fw_distribution_start(wiced_bt_mesh_event_t *p_event, uint8_t *p_data, uint32_t length);
+uint8_t mesh_provisioner_process_fw_distribution_suspend(wiced_bt_mesh_event_t *p_event, uint8_t *p_data, uint32_t length);
+uint8_t mesh_provisioner_process_fw_distribution_resume(wiced_bt_mesh_event_t *p_event, uint8_t *p_data, uint32_t length);
+uint8_t mesh_provisioner_process_fw_distribution_stop(wiced_bt_mesh_event_t *p_event, uint8_t *p_data, uint32_t length);
+uint8_t mesh_provisioner_process_fw_distribution_get_status(wiced_bt_mesh_event_t *p_event, uint8_t *p_data, uint32_t length);
 #endif
 static uint8_t mesh_provisioner_process_relay_get(wiced_bt_mesh_event_t *p_event, uint8_t *p_data, uint32_t length);
 static uint8_t mesh_provisioner_process_relay_set(wiced_bt_mesh_event_t *p_event, uint8_t *p_data, uint32_t length);
@@ -293,6 +328,10 @@ static void mesh_provisioner_hci_event_default_ttl_status_send(wiced_bt_mesh_hci
 static void mesh_provisioner_hci_event_relay_status_send(wiced_bt_mesh_hci_event_t *p_hci_event, wiced_bt_mesh_config_relay_status_data_t *p_data);
 static void mesh_provisioner_hci_event_gatt_proxy_status_send(wiced_bt_mesh_hci_event_t *p_hci_event, wiced_bt_mesh_config_gatt_proxy_status_data_t *p_data);
 static void mesh_provisioner_hci_event_beacon_status_send(wiced_bt_mesh_hci_event_t *p_hci_event, wiced_bt_mesh_config_beacon_status_data_t *p_data);
+#ifdef SAR_CONFIGURATION_SUPPORTED
+static void mesh_provisioner_hci_event_sar_transmitter_status_send(wiced_bt_mesh_hci_event_t *p_hci_event, wiced_bt_mesh_sar_xmtr_t *p_data);
+static void mesh_provisioner_hci_event_sar_receiver_status_send(wiced_bt_mesh_hci_event_t *p_hci_event, wiced_bt_mesh_sar_rcvr_t *p_data);
+#endif
 #ifdef PRIVATE_PROXY_SUPPORTED
 static void mesh_provisioner_hci_event_private_beacon_status_send(wiced_bt_mesh_hci_event_t *p_hci_event, wiced_bt_mesh_config_private_beacon_status_data_t *p_data);
 static void mesh_provisioner_hci_event_private_gatt_proxy_status_send(wiced_bt_mesh_hci_event_t *p_hci_event, wiced_bt_mesh_config_private_gatt_proxy_status_data_t *p_data);
@@ -353,8 +392,22 @@ static uint8_t mesh_provisioner_process_send_invite(wiced_bt_mesh_event_t *p_eve
 static uint8_t mesh_provisioner_process_record_get(wiced_bt_mesh_event_t *p_event, uint8_t *p_data, uint32_t length);
 #endif
 
+#ifdef OPCODES_AGGREGATOR_SUPPORTED
+static void mesh_provisioner_hci_agg_item_add_status_send(uint8_t status);
+#endif
+
 #ifdef NETWORK_FILTER_SERVER_SUPPORTED
 static void mesh_provisioner_hci_event_network_filter_status_send(wiced_bt_mesh_hci_event_t* p_hci_event, wiced_bt_mesh_network_filter_status_data_t* p_data);
+#endif
+
+#ifdef LARGE_COMPOSITION_DATA_SUPPORTED
+static void mesh_provisioner_hci_event_large_compos_data_status_send(wiced_bt_mesh_hci_event_t *p_hci_event, wiced_bt_mesh_config_large_compos_data_status_data_t *p_data);
+static void mesh_provisioner_hci_event_models_metadata_status_send(wiced_bt_mesh_hci_event_t *p_hci_event, wiced_bt_mesh_config_models_metadata_status_data_t *p_data);
+#endif
+
+#ifdef MESH_DFU_SUPPORTED
+void mesh_provisioner_hci_event_fw_distribution_status_send(wiced_bt_mesh_hci_event_t *p_hci_event, wiced_bt_mesh_fw_distribution_status_data_t *p_data);
+void mesh_provisioner_hci_event_fw_update_metadata_status_send(wiced_bt_mesh_hci_event_t *p_hci_event, wiced_bt_mesh_dfu_metadata_status_data_t *p_data);
 #endif
 
 /******************************************************
@@ -395,6 +448,9 @@ wiced_bt_mesh_core_config_model_t   mesh_element1_models[] =
 #ifdef NETWORK_FILTER_SERVER_SUPPORTED
     WICED_BT_MESH_NETWORK_FILTER_CLIENT,
 #endif
+#ifdef LARGE_COMPOSITION_DATA_SUPPORTED
+    WICED_BT_MESH_MODEL_LARGE_COMPOS_DATA_CLIENT,
+#endif
 #ifdef WICED_BT_MESH_MODEL_PROPERTY_CLIENT_INCLUDED
     WICED_BT_MESH_MODEL_PROPERTY_CLIENT,
 #endif
@@ -427,12 +483,20 @@ wiced_bt_mesh_core_config_model_t   mesh_element1_models[] =
     WICED_BT_MESH_MODEL_REMOTE_PROVISION_SERVER,
     WICED_BT_MESH_MODEL_REMOTE_PROVISION_CLIENT,
     WICED_BT_MESH_MODEL_DEFAULT_TRANSITION_TIME_CLIENT,
+#ifdef SAR_CONFIGURATION_SUPPORTED
+    WICED_BT_MESH_MODEL_SAR_CONFIG_CLIENT,
+#ifdef PTS
+    WICED_BT_MESH_MODEL_SAR_CONFIG_SERVER,
+#endif
+#endif
 #ifdef PRIVATE_PROXY_SUPPORTED
     WICED_BT_MESH_MODEL_PRIVATE_PROXY_CLIENT,
 #endif
+#ifdef OPCODES_AGGREGATOR_SUPPORTED
+    WICED_BT_MESH_MODEL_OPCODES_AGGREGATOR_CLIENT,
+#endif
 #ifdef MESH_DFU_SUPPORTED
-    WICED_BT_MESH_MODEL_FW_UPDATE_CLIENT,
-    WICED_BT_MESH_MODEL_BLOB_TRANSFER_CLIENT,
+    WICED_BT_MESH_MODEL_FW_STANDALONE_UPDATER,
 #endif
 #ifdef WICED_BT_MESH_MODEL_SENSOR_CLIENT_INCLUDED
     WICED_BT_MESH_MODEL_SENSOR_CLIENT,
@@ -647,6 +711,9 @@ void mesh_app_init(wiced_bool_t is_provisioned)
 #ifdef WICED_BT_MESH_MODEL_TIME_CLIENT_INCLUDED
     wiced_bt_mesh_model_time_client_init(mesh_time_client_message_handler, is_provisioned);
 #endif
+#ifdef MESH_DFU_SUPPORTED
+    wiced_bt_mesh_model_fw_distribution_server_init();
+#endif
 
     p_proxy_status_message_handler = mesh_proxy_client_process_filter_status;
 }
@@ -826,6 +893,15 @@ void mesh_config_client_message_handler(uint16_t event, wiced_bt_mesh_event_t *p
         mesh_provisioner_hci_event_network_filter_status_send(p_hci_event, (wiced_bt_mesh_network_filter_status_data_t*)p_data);
         break;
 #endif
+#ifdef LARGE_COMPOSITION_DATA_SUPPORTED
+    case WICED_BT_MESH_CONFIG_LARGE_COMPOS_DATA_STATUS:
+        mesh_provisioner_hci_event_large_compos_data_status_send(p_hci_event, (wiced_bt_mesh_config_large_compos_data_status_data_t *)p_data);
+        break;
+
+    case WICED_BT_MESH_CONFIG_MODELS_METADATA_STATUS:
+        mesh_provisioner_hci_event_models_metadata_status_send(p_hci_event, (wiced_bt_mesh_config_models_metadata_status_data_t *)p_data);
+        break;
+#endif
 
     case WICED_BT_MESH_CONFIG_BEACON_STATUS:
         mesh_provisioner_hci_event_beacon_status_send(p_hci_event, (wiced_bt_mesh_config_beacon_status_data_t *)p_data);
@@ -838,6 +914,16 @@ void mesh_config_client_message_handler(uint16_t event, wiced_bt_mesh_event_t *p
     case WICED_BT_MESH_CONFIG_NODE_IDENTITY_STATUS:
         mesh_provisioner_hci_event_node_identity_status_send(p_hci_event, (wiced_bt_mesh_config_node_identity_status_data_t *)p_data);
         break;
+
+#ifdef SAR_CONFIGURATION_SUPPORTED
+    case WICED_BT_MESH_CONFIG_SAR_TRANSMITTER_STATUS:
+        mesh_provisioner_hci_event_sar_transmitter_status_send(p_hci_event, (wiced_bt_mesh_sar_xmtr_t*)p_data);
+        break;
+
+    case WICED_BT_MESH_CONFIG_SAR_RECEIVER_STATUS:
+        mesh_provisioner_hci_event_sar_receiver_status_send(p_hci_event, (wiced_bt_mesh_sar_rcvr_t*)p_data);
+        break;
+#endif
 
 #ifdef PRIVATE_PROXY_SUPPORTED
     case WICED_BT_MESH_CONFIG_PRIVATE_BEACON_STATUS:
@@ -980,6 +1066,16 @@ void mesh_config_client_message_handler(uint16_t event, wiced_bt_mesh_event_t *p
     case WICED_BT_MESH_PROXY_CONNECTION_STATUS:
         mesh_provisioner_hci_event_proxy_connection_status_send(p_hci_event, (wiced_bt_mesh_connect_status_data_t *)p_data);
         break;
+
+#ifdef MESH_DFU_SUPPORTED
+    case WICED_BT_MESH_FW_DISTRIBUTION_STATUS:
+        mesh_provisioner_hci_event_fw_distribution_status_send(p_hci_event, (wiced_bt_mesh_fw_distribution_status_data_t *)p_data);
+        break;
+
+    case WICED_BT_MESH_FW_UPDATE_METADATA_STATUS:
+        mesh_provisioner_hci_event_fw_update_metadata_status_send(p_hci_event, (wiced_bt_mesh_dfu_metadata_status_data_t *)p_data);
+        break;
+#endif
 
     default:
         WICED_BT_TRACE("ignored\n");
@@ -1153,6 +1249,16 @@ uint32_t mesh_app_proc_rx_cmd(uint16_t opcode, uint8_t *p_data, uint32_t length)
     case HCI_CONTROL_MESH_COMMAND_NETWORK_FILTER_GET:
     case HCI_CONTROL_MESH_COMMAND_NETWORK_FILTER_SET:
 #endif
+#ifdef LARGE_COMPOSITION_DATA_SUPPORTED
+    case HCI_CONTROL_MESH_COMMAND_CONFIG_LARGE_COMPOS_DATA_GET:
+    case HCI_CONTROL_MESH_COMMAND_CONFIG_MODELS_METADATA_GET:
+#endif
+#ifdef SAR_CONFIGURATION_SUPPORTED
+    case HCI_CONTROL_MESH_COMMAND_CONFIG_SAR_TRANSMITTER_GET:
+    case HCI_CONTROL_MESH_COMMAND_CONFIG_SAR_TRANSMITTER_SET:
+    case HCI_CONTROL_MESH_COMMAND_CONFIG_SAR_RECEIVER_GET:
+    case HCI_CONTROL_MESH_COMMAND_CONFIG_SAR_RECEIVER_SET:
+#endif
 #ifdef PRIVATE_PROXY_SUPPORTED
     case HCI_CONTROL_MESH_COMMAND_CONFIG_PRIVATE_BEACON_GET:
     case HCI_CONTROL_MESH_COMMAND_CONFIG_PRIVATE_BEACON_SET:
@@ -1235,6 +1341,39 @@ uint32_t mesh_app_proc_rx_cmd(uint16_t opcode, uint8_t *p_data, uint32_t length)
             return WICED_FALSE;
         }
         break;
+
+#ifdef OPCODES_AGGREGATOR_SUPPORTED
+    case HCI_CONTROL_MESH_COMMAND_OPCODES_AGGREGATOR_START:
+        status = mesh_provisioner_process_aggregator_start(p_data, length);
+        mesh_provisioner_hci_send_status(status);
+        return WICED_TRUE;
+
+    case HCI_CONTROL_MESH_COMMAND_OPCODES_AGGREGATOR_FINISH:
+        status = mesh_provisioner_process_aggregator_finish(p_data, length);
+        mesh_provisioner_hci_send_status(status);
+        return WICED_TRUE;
+#endif
+
+#ifdef MESH_DFU_SUPPORTED
+    case HCI_CONTROL_MESH_COMMAND_FW_DISTRIBUTION_UPLOAD_START:
+    case HCI_CONTROL_MESH_COMMAND_FW_DISTRIBUTION_UPLOAD_DATA:
+    case HCI_CONTROL_MESH_COMMAND_FW_DISTRIBUTION_UPLOAD_FINISH:
+        break;
+
+    case HCI_CONTROL_MESH_COMMAND_FW_UPDATE_METADATA_CHECK:
+    case HCI_CONTROL_MESH_COMMAND_FW_DISTRIBUTION_START:
+    case HCI_CONTROL_MESH_COMMAND_FW_DISTRIBUTION_SUSPEND:
+    case HCI_CONTROL_MESH_COMMAND_FW_DISTRIBUTION_RESUME:
+    case HCI_CONTROL_MESH_COMMAND_FW_DISTRIBUTION_STOP:
+    case HCI_CONTROL_MESH_COMMAND_FW_DISTRIBUTION_GET_STATUS:
+        p_event = wiced_bt_mesh_create_event_from_wiced_hci(opcode, MESH_COMPANY_ID_BT_SIG, WICED_BT_MESH_CORE_MODEL_ID_FW_DISTRIBUTION_CLNT, &p_data, &length);
+        if (p_event == NULL)
+        {
+            WICED_BT_TRACE("bad hdr\n");
+            return WICED_FALSE;
+        }
+        break;
+#endif
 
     default:
         WICED_BT_TRACE("bad hdr\n");
@@ -1458,6 +1597,32 @@ uint32_t mesh_app_proc_rx_cmd(uint16_t opcode, uint8_t *p_data, uint32_t length)
         status = mesh_provisioner_process_network_filter_set(p_event, p_data, length);
         break;
 #endif
+#ifdef LARGE_COMPOSITION_DATA_SUPPORTED
+    case HCI_CONTROL_MESH_COMMAND_CONFIG_LARGE_COMPOS_DATA_GET:
+        status = mesh_provisioner_process_large_compos_data_get(p_event, p_data, length);
+        break;
+
+    case HCI_CONTROL_MESH_COMMAND_CONFIG_MODELS_METADATA_GET:
+        status = mesh_provisioner_process_models_metadata_get(p_event, p_data, length);
+        break;
+#endif
+#ifdef SAR_CONFIGURATION_SUPPORTED
+    case HCI_CONTROL_MESH_COMMAND_CONFIG_SAR_TRANSMITTER_GET:
+        status = mesh_provisioner_process_sar_transmitter_get(p_event, p_data, length);
+        break;
+
+    case HCI_CONTROL_MESH_COMMAND_CONFIG_SAR_TRANSMITTER_SET:
+        status = mesh_provisioner_process_sar_transmitter_set(p_event, p_data, length);
+        break;
+
+    case HCI_CONTROL_MESH_COMMAND_CONFIG_SAR_RECEIVER_GET:
+        status = mesh_provisioner_process_sar_receiver_get(p_event, p_data, length);
+        break;
+
+    case HCI_CONTROL_MESH_COMMAND_CONFIG_SAR_RECEIVER_SET:
+        status = mesh_provisioner_process_sar_receiver_set(p_event, p_data, length);
+        break;
+#endif
 #ifdef PRIVATE_PROXY_SUPPORTED
     case HCI_CONTROL_MESH_COMMAND_CONFIG_PRIVATE_BEACON_GET:
         status = mesh_provisioner_process_private_beacon_get(p_event, p_data, length);
@@ -1677,6 +1842,45 @@ uint32_t mesh_app_proc_rx_cmd(uint16_t opcode, uint8_t *p_data, uint32_t length)
         status = mesh_provisioner_process_record_get(p_event, p_data, length);
         break;
 #endif
+
+#ifdef MESH_DFU_SUPPORTED
+    case HCI_CONTROL_MESH_COMMAND_FW_DISTRIBUTION_UPLOAD_START:
+        status = mesh_provisioner_process_fw_upload_start(p_data, length);
+        break;
+
+    case HCI_CONTROL_MESH_COMMAND_FW_DISTRIBUTION_UPLOAD_DATA:
+        status = mesh_provisioner_process_fw_upload_data(p_data, length);
+        break;
+
+    case HCI_CONTROL_MESH_COMMAND_FW_DISTRIBUTION_UPLOAD_FINISH:
+        status = mesh_provisioner_process_fw_upload_finish(p_data, length);
+        break;
+
+    case HCI_CONTROL_MESH_COMMAND_FW_UPDATE_METADATA_CHECK:
+        status = mesh_provisioner_process_fw_update_metadata_check(p_event, p_data, length);
+        break;
+
+    case HCI_CONTROL_MESH_COMMAND_FW_DISTRIBUTION_START:
+        status = mesh_provisioner_process_fw_distribution_start(p_event, p_data, length);
+        break;
+
+    case HCI_CONTROL_MESH_COMMAND_FW_DISTRIBUTION_SUSPEND:
+        status = mesh_provisioner_process_fw_distribution_suspend(p_event, p_data, length);
+        break;
+
+    case HCI_CONTROL_MESH_COMMAND_FW_DISTRIBUTION_RESUME:
+        status = mesh_provisioner_process_fw_distribution_resume(p_event, p_data, length);
+        break;
+
+    case HCI_CONTROL_MESH_COMMAND_FW_DISTRIBUTION_STOP:
+        status = mesh_provisioner_process_fw_distribution_stop(p_event, p_data, length);
+        break;
+
+    case HCI_CONTROL_MESH_COMMAND_FW_DISTRIBUTION_GET_STATUS:
+        status = mesh_provisioner_process_fw_distribution_get_status(p_event, p_data, length);
+        break;
+#endif
+
     default:
         wiced_bt_mesh_release_event(p_event);
         break;
@@ -2094,6 +2298,45 @@ uint8_t mesh_provisioner_process_proxy_disconnect(uint8_t *p_data, uint32_t leng
 {
     return wiced_bt_mesh_client_proxy_disconnect() ? HCI_CONTROL_MESH_STATUS_SUCCESS : HCI_CONTROL_MESH_STATUS_ERROR;
 }
+
+#ifdef OPCODES_AGGREGATOR_SUPPORTED
+uint8_t mesh_provisioner_process_aggregator_start(uint8_t *p_data, uint32_t length)
+{
+    uint16_t dst_addr, app_key_idx, element_addr;
+    uint8_t dst_elem_idx;
+    wiced_bool_t is_command, result;
+
+    STREAM_TO_UINT16(dst_addr, p_data);
+    STREAM_TO_UINT8(dst_elem_idx, p_data);
+    STREAM_TO_UINT16(app_key_idx, p_data);
+    STREAM_TO_UINT8(is_command, p_data);
+    STREAM_TO_UINT16(element_addr, p_data);
+    result = wiced_bt_mesh_opcodes_aggregator_start(dst_addr, dst_elem_idx, app_key_idx, is_command, element_addr, mesh_provisioner_hci_agg_item_add_status_send);
+
+    return result ? HCI_CONTROL_MESH_STATUS_SUCCESS : HCI_CONTROL_MESH_STATUS_ERROR;
+}
+
+uint8_t mesh_provisioner_process_aggregator_finish(uint8_t *p_data, uint32_t length)
+{
+    uint8_t status;
+    wiced_bool_t result;
+
+    STREAM_TO_UINT8(status, p_data);
+    result = wiced_bt_mesh_opcodes_aggregator_finish_and_send(status);
+
+    return result ? HCI_CONTROL_MESH_STATUS_SUCCESS : HCI_CONTROL_MESH_STATUS_ERROR;
+}
+
+void mesh_provisioner_hci_agg_item_add_status_send(uint8_t status)
+{
+    uint8_t *p_buffer = wiced_transport_allocate_buffer(host_trans_pool);
+    uint8_t *p = p_buffer;
+
+    UINT8_TO_STREAM(p, status);
+
+    mesh_transport_send_data(HCI_CONTROL_MESH_EVENT_OPCODES_AGGREGATOR_ADD_STATUS, p_buffer, (uint16_t)(p - p_buffer));
+}
+#endif
 
 /*
  * Process command from MCU to Reset Node
@@ -2629,6 +2872,34 @@ static uint8_t mesh_provisioner_process_network_filter_set(wiced_bt_mesh_event_t
 }
 #endif
 
+#ifdef LARGE_COMPOSITION_DATA_SUPPORTED
+/*
+* Process command from MCU to Get Mesh Node Large Composition Data
+*/
+uint8_t mesh_provisioner_process_large_compos_data_get(wiced_bt_mesh_event_t *p_event, uint8_t *p_data, uint32_t length)
+{
+    wiced_bt_mesh_config_large_compos_data_get_data_t data;
+
+    STREAM_TO_UINT8(data.page, p_data);
+    STREAM_TO_UINT16(data.offset, p_data);
+
+    return wiced_bt_mesh_config_large_compos_data_get(p_event, &data) ? HCI_CONTROL_MESH_STATUS_SUCCESS : HCI_CONTROL_MESH_STATUS_ERROR;
+}
+
+/*
+* Process command from MCU to Get Mesh Node Models Metadata
+*/
+uint8_t mesh_provisioner_process_models_metadata_get(wiced_bt_mesh_event_t *p_event, uint8_t *p_data, uint32_t length)
+{
+    wiced_bt_mesh_config_models_metadata_get_data_t data;
+
+    STREAM_TO_UINT8(data.page, p_data);
+    STREAM_TO_UINT16(data.offset, p_data);
+
+    return wiced_bt_mesh_config_models_metadata_get(p_event, &data) ? HCI_CONTROL_MESH_STATUS_SUCCESS : HCI_CONTROL_MESH_STATUS_ERROR;
+}
+#endif
+
 /*
  * Process command from MCU to Get Relay Status and parameters
  */
@@ -2720,6 +2991,54 @@ uint8_t mesh_provisioner_process_node_identity_set(wiced_bt_mesh_event_t *p_even
 
     return wiced_bt_mesh_config_node_identity_set(p_event, &data) ? HCI_CONTROL_MESH_STATUS_SUCCESS : HCI_CONTROL_MESH_STATUS_ERROR;
 }
+
+#ifdef SAR_CONFIGURATION_SUPPORTED
+/*
+* Process command from MCU to Get SAR Transmitter state
+*/
+uint8_t mesh_provisioner_process_sar_transmitter_get(wiced_bt_mesh_event_t *p_event, uint8_t *p_data, uint32_t length)
+{
+    return wiced_bt_mesh_config_sar_transmitter_get(p_event) ? HCI_CONTROL_MESH_STATUS_SUCCESS : HCI_CONTROL_MESH_STATUS_ERROR;
+}
+
+/*
+* Process command from MCU to Set SAR Transmitter state
+*/
+uint8_t mesh_provisioner_process_sar_transmitter_set(wiced_bt_mesh_event_t *p_event, uint8_t *p_data, uint32_t length)
+{
+    wiced_bt_mesh_sar_xmtr_t xmtr;
+
+    if (length != MESH_SAR_XMTR_PARAMS_LEN)
+        return HCI_CONTROL_MESH_STATUS_ERROR;
+
+    memcpy(&xmtr, p_data, MESH_SAR_XMTR_PARAMS_LEN);
+
+    return wiced_bt_mesh_config_sar_transmitter_set(p_event, &xmtr) ? HCI_CONTROL_MESH_STATUS_SUCCESS : HCI_CONTROL_MESH_STATUS_ERROR;
+}
+
+/*
+* Process command from MCU to Get SAR Receiver state
+*/
+uint8_t mesh_provisioner_process_sar_receiver_get(wiced_bt_mesh_event_t *p_event, uint8_t *p_data, uint32_t length)
+{
+    return wiced_bt_mesh_config_sar_receiver_get(p_event) ? HCI_CONTROL_MESH_STATUS_SUCCESS : HCI_CONTROL_MESH_STATUS_ERROR;
+}
+
+/*
+* Process command from MCU to Set SAR Receiver state
+*/
+uint8_t mesh_provisioner_process_sar_receiver_set(wiced_bt_mesh_event_t *p_event, uint8_t *p_data, uint32_t length)
+{
+    wiced_bt_mesh_sar_rcvr_t rcvr;
+
+    if (length != MESH_SAR_RCVR_PARAMS_LEN)
+        return HCI_CONTROL_MESH_STATUS_ERROR;
+
+    memcpy(&rcvr, p_data, MESH_SAR_RCVR_PARAMS_LEN);
+
+    return wiced_bt_mesh_config_sar_receiver_set(p_event, &rcvr) ? HCI_CONTROL_MESH_STATUS_SUCCESS : HCI_CONTROL_MESH_STATUS_ERROR;
+}
+#endif
 
 #ifdef PRIVATE_PROXY_SUPPORTED
 /*
@@ -3206,6 +3525,120 @@ uint8_t mesh_provisioner_process_record_get(wiced_bt_mesh_event_t *p_event, uint
     BE_STREAM_TO_UINT16(data.total_length, p_data);
 
     return wiced_bt_mesh_provision_retrieve_record(p_event, &data) ? HCI_CONTROL_MESH_STATUS_SUCCESS : HCI_CONTROL_MESH_STATUS_ERROR;
+}
+#endif
+
+#ifdef MESH_DFU_SUPPORTED
+uint8_t fw_distribution_server_process_upload_start(wiced_bt_mesh_event_t* p_event, uint8_t* p_data, uint16_t data_len);
+void fw_distribution_server_blob_transfer_callback(uint16_t event, void* p_data);
+uint8_t fw_distribution_server_get_upload_phase(void);
+uint8_t mesh_fw_distribution_get_distribution_state(void);
+
+void mesh_provisioner_hci_send_fw_distr_status(uint8_t status)
+{
+    uint8_t* p_buffer = wiced_transport_allocate_buffer(host_trans_pool);
+    uint8_t* p = p_buffer;
+
+    UINT8_TO_STREAM(p, status);
+    UINT8_TO_STREAM(p, fw_distribution_server_get_upload_phase());
+    UINT8_TO_STREAM(p, mesh_fw_distribution_get_distribution_state());
+
+    mesh_transport_send_data(HCI_CONTROL_MESH_EVENT_FW_DISTRIBUTION_UPLOAD_STATUS, p_buffer, (uint16_t)(p - p_buffer));
+}
+
+uint8_t mesh_provisioner_process_fw_upload_start(uint8_t *p_data, uint32_t length)
+{
+    uint8_t status;
+
+    if (wiced_firmware_upgrade_init_nv_locations())
+        status = fw_distribution_server_process_upload_start(NULL, p_data, length);
+    else
+        status = WICED_BT_MESH_FW_DISTR_STATUS_NOT_SUPPORTED;
+
+    mesh_provisioner_hci_send_fw_distr_status(status);
+
+    if (status == WICED_BT_MESH_FW_DISTR_STATUS_SUCCESS)
+        fw_distribution_server_blob_transfer_callback(WICED_BT_MESH_BLOB_TRANSFER_START, NULL);
+
+    return status;
+}
+
+uint8_t mesh_provisioner_process_fw_upload_data(uint8_t *p_data, uint32_t length)
+{
+    wiced_bt_mesh_blob_transfer_block_data_t data;
+
+    STREAM_TO_UINT32(data.offset, p_data);
+    data.data_len = length - 4;
+    data.p_data = p_data;
+    fw_distribution_server_blob_transfer_callback(WICED_BT_MESH_BLOB_TRANSFER_DATA, &data);
+
+    mesh_provisioner_hci_send_fw_distr_status(WICED_BT_MESH_FW_DISTR_STATUS_SUCCESS);
+    return HCI_CONTROL_MESH_STATUS_SUCCESS;
+}
+
+uint8_t mesh_provisioner_process_fw_upload_finish(uint8_t *p_data, uint32_t length)
+{
+    wiced_bt_mesh_blob_transfer_finish_t finish;
+
+    STREAM_TO_UINT8(finish.blob_transfer_result, p_data);
+    fw_distribution_server_blob_transfer_callback(WICED_BT_MESH_BLOB_TRANSFER_FINISH, &finish);
+
+    mesh_provisioner_hci_send_fw_distr_status(WICED_BT_MESH_FW_DISTR_STATUS_SUCCESS);
+    return HCI_CONTROL_MESH_STATUS_SUCCESS;
+}
+
+uint8_t mesh_provisioner_process_fw_update_metadata_check(wiced_bt_mesh_event_t *p_event, uint8_t *p_data, uint32_t length)
+{
+    wiced_bt_mesh_dfu_metadata_check_data_t data;
+
+    STREAM_TO_UINT8(data.index, p_data);
+    data.metadata.len = length - 1;
+    memcpy(data.metadata.data, p_data, data.metadata.len);
+
+    return wiced_bt_mesh_dfu_metadata_check(p_event, &data, mesh_config_client_message_handler) ? HCI_CONTROL_MESH_STATUS_SUCCESS : HCI_CONTROL_MESH_STATUS_ERROR;
+}
+
+uint8_t mesh_provisioner_process_fw_distribution_start(wiced_bt_mesh_event_t *p_event, uint8_t *p_data, uint32_t length)
+{
+    wiced_bt_mesh_fw_distribution_start_data_t start;
+
+    STREAM_TO_UINT8(start.firmware_id.fw_id_len, p_data);
+    memcpy(start.firmware_id.fw_id, p_data, start.firmware_id.fw_id_len);
+    p_data += start.firmware_id.fw_id_len;
+    STREAM_TO_UINT8(start.metadata.len, p_data);
+    memcpy(start.metadata.data, p_data, start.metadata.len);
+    p_data += start.metadata.len;
+    STREAM_TO_UINT32(start.firmware_size, p_data);
+    STREAM_TO_UINT16(start.proxy_addr, p_data);
+    STREAM_TO_UINT16(start.group_addr, p_data);
+    STREAM_TO_UINT16(start.group_size, p_data);
+    for (int i = 0; i < start.group_size; i++)
+    {
+        STREAM_TO_UINT16(start.update_nodes[i].addr, p_data);
+        STREAM_TO_UINT8(start.update_nodes[i].low_power, p_data);
+    }
+
+    return wiced_bt_mesh_fw_provider_start(p_event, &start, mesh_config_client_message_handler) ? HCI_CONTROL_MESH_STATUS_SUCCESS : HCI_CONTROL_MESH_STATUS_ERROR;
+}
+
+uint8_t mesh_provisioner_process_fw_distribution_suspend(wiced_bt_mesh_event_t *p_event, uint8_t *p_data, uint32_t length)
+{
+    return wiced_bt_mesh_fw_provider_suspend(p_event) ? HCI_CONTROL_MESH_STATUS_SUCCESS : HCI_CONTROL_MESH_STATUS_ERROR;
+}
+
+uint8_t mesh_provisioner_process_fw_distribution_resume(wiced_bt_mesh_event_t *p_event, uint8_t *p_data, uint32_t length)
+{
+    return wiced_bt_mesh_fw_provider_resume(p_event) ? HCI_CONTROL_MESH_STATUS_SUCCESS : HCI_CONTROL_MESH_STATUS_ERROR;
+}
+
+uint8_t mesh_provisioner_process_fw_distribution_stop(wiced_bt_mesh_event_t *p_event, uint8_t *p_data, uint32_t length)
+{
+    return wiced_bt_mesh_fw_provider_stop(p_event) ? HCI_CONTROL_MESH_STATUS_SUCCESS : HCI_CONTROL_MESH_STATUS_ERROR;
+}
+
+uint8_t mesh_provisioner_process_fw_distribution_get_status(wiced_bt_mesh_event_t *p_event, uint8_t *p_data, uint32_t length)
+{
+    return wiced_bt_mesh_fw_provider_get_status(p_event, mesh_config_client_message_handler) ? HCI_CONTROL_MESH_STATUS_SUCCESS : HCI_CONTROL_MESH_STATUS_ERROR;
 }
 #endif
 
@@ -3796,6 +4229,36 @@ void mesh_provisioner_hci_event_network_filter_status_send(wiced_bt_mesh_hci_eve
 
 #endif
 
+#ifdef LARGE_COMPOSITION_DATA_SUPPORTED
+void mesh_provisioner_hci_event_large_compos_data_status_send(wiced_bt_mesh_hci_event_t *p_hci_event, wiced_bt_mesh_config_large_compos_data_status_data_t *p_data)
+{
+    uint8_t *p = p_hci_event->data;
+
+    WICED_BT_TRACE("large comp status src:%x page:%d offset:%d len:%d\n", p_hci_event->src, p_data->page, p_data->offset, p_data->data_len);
+
+    UINT8_TO_STREAM(p, p_data->page);
+    UINT16_TO_STREAM(p, p_data->offset);
+    UINT16_TO_STREAM(p, p_data->total_size);
+    ARRAY_TO_STREAM(p, p_data->p_data, p_data->data_len);
+
+    mesh_transport_send_data(HCI_CONTROL_MESH_EVENT_LARGE_COMPOS_DATA_STATUS, (uint8_t *)p_hci_event, (uint16_t)(p - (uint8_t *)p_hci_event));
+}
+
+void mesh_provisioner_hci_event_models_metadata_status_send(wiced_bt_mesh_hci_event_t *p_hci_event, wiced_bt_mesh_config_models_metadata_status_data_t *p_data)
+{
+    uint8_t *p = p_hci_event->data;
+
+    WICED_BT_TRACE("metadata status src:%x page:%d offset:%d len:%d\n", p_hci_event->src, p_data->page, p_data->offset, p_data->data_len);
+
+    UINT8_TO_STREAM(p, p_data->page);
+    UINT16_TO_STREAM(p, p_data->offset);
+    UINT16_TO_STREAM(p, p_data->total_size);
+    ARRAY_TO_STREAM(p, p_data->p_data, p_data->data_len);
+
+    mesh_transport_send_data(HCI_CONTROL_MESH_EVENT_MODELS_METADATA_STATUS, (uint8_t *)p_hci_event, (uint16_t)(p - (uint8_t *)p_hci_event));
+}
+#endif
+
 void mesh_provisioner_hci_event_gatt_proxy_status_send(wiced_bt_mesh_hci_event_t *p_hci_event, wiced_bt_mesh_config_gatt_proxy_status_data_t *p_data)
 {
     uint8_t *p = p_hci_event->data;
@@ -3817,6 +4280,32 @@ void mesh_provisioner_hci_event_beacon_status_send(wiced_bt_mesh_hci_event_t *p_
 
     mesh_transport_send_data(HCI_CONTROL_MESH_EVENT_BEACON_STATUS, (uint8_t *)p_hci_event, (uint16_t)(p - (uint8_t *)p_hci_event));
 }
+
+#ifdef SAR_CONFIGURATION_SUPPORTED
+void mesh_provisioner_hci_event_sar_transmitter_status_send(wiced_bt_mesh_hci_event_t *p_hci_event, wiced_bt_mesh_sar_xmtr_t *p_data)
+{
+    uint8_t *p = p_hci_event->data;
+
+    WICED_BT_TRACE("SAR transmitter status src:%x\n", p_hci_event->src);
+
+    memcpy(p, p_data, MESH_SAR_XMTR_PARAMS_LEN);
+    p += MESH_SAR_XMTR_PARAMS_LEN;
+
+    mesh_transport_send_data(HCI_CONTROL_MESH_EVENT_SAR_TRANSMITTER_STATUS, (uint8_t*)p_hci_event, (uint16_t)(p - (uint8_t*)p_hci_event));
+}
+
+void mesh_provisioner_hci_event_sar_receiver_status_send(wiced_bt_mesh_hci_event_t *p_hci_event, wiced_bt_mesh_sar_rcvr_t *p_data)
+{
+    uint8_t *p = p_hci_event->data;
+
+    WICED_BT_TRACE("SAR receiver status src:%x\n", p_hci_event->src);
+
+    memcpy(p, p_data, MESH_SAR_RCVR_PARAMS_LEN);
+    p += MESH_SAR_RCVR_PARAMS_LEN;
+
+    mesh_transport_send_data(HCI_CONTROL_MESH_EVENT_SAR_RECEIVER_STATUS, (uint8_t*)p_hci_event, (uint16_t)(p - (uint8_t*)p_hci_event));
+}
+#endif
 
 #ifdef PRIVATE_PROXY_SUPPORTED
 void mesh_provisioner_hci_event_private_beacon_status_send(wiced_bt_mesh_hci_event_t *p_hci_event, wiced_bt_mesh_config_private_beacon_status_data_t *p_data)
@@ -4128,6 +4617,37 @@ void mesh_provisioner_hci_event_lpn_poll_timeout_status_send(wiced_bt_mesh_hci_e
 
     mesh_transport_send_data(HCI_CONTROL_MESH_EVENT_LPN_POLL_TIMEOUT_STATUS, (uint8_t *)p_hci_event, (uint16_t)(p - (uint8_t *)p_hci_event));
 }
+
+#ifdef MESH_DFU_SUPPORTED
+void mesh_provisioner_hci_event_fw_distribution_status_send(wiced_bt_mesh_hci_event_t *p_hci_event, wiced_bt_mesh_fw_distribution_status_data_t *p_data)
+{
+    uint8_t *p = p_hci_event->data;
+
+    UINT8_TO_STREAM(p, p_data->state);
+    UINT16_TO_STREAM(p, p_data->list_size);
+    UINT16_TO_STREAM(p, p_data->node_index);
+    UINT16_TO_STREAM(p, p_data->num_nodes);
+    for (int i = 0; i < p_data->num_nodes; i++)
+    {
+        UINT16_TO_STREAM(p, p_data->node[i].unicast_address);
+        UINT8_TO_STREAM(p, p_data->node[i].phase);
+        UINT8_TO_STREAM(p, p_data->node[i].progress);
+    }
+
+    mesh_transport_send_data(HCI_CONTROL_MESH_EVENT_FW_DISTRIBUTION_STATUS, (uint8_t *)p_hci_event, (uint16_t)(p - (uint8_t *)p_hci_event));
+}
+
+void mesh_provisioner_hci_event_fw_update_metadata_status_send(wiced_bt_mesh_hci_event_t *p_hci_event, wiced_bt_mesh_dfu_metadata_status_data_t *p_data)
+{
+    uint8_t *p = p_hci_event->data;
+
+    UINT8_TO_STREAM(p, p_data->status);
+    UINT8_TO_STREAM(p, p_data->add_info);
+    UINT8_TO_STREAM(p, p_data->index);
+
+    mesh_transport_send_data(HCI_CONTROL_MESH_EVENT_FW_UPDATE_METADATA_STATUS, (uint8_t *)p_hci_event, (uint16_t)(p - (uint8_t *)p_hci_event));
+}
+#endif
 
 // ToDo. Currently provisioner client will only scan passive not returning the name of the unprovisioned device
 // which is in the scan response.  To change that, we need to use wiced_bt_ble_scan instead of wiced_bt_ble_observe.
